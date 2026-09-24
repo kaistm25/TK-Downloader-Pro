@@ -1,0 +1,66 @@
+﻿# ==================== Python ====================
+__pycache__/
+*.py[cod]
+*.egg-info/
+
+# ==================== Environnement virtuel ====================
+venv/
+env/
+ENV/
+.venv/
+
+# ==================== PyInstaller ====================
+build/
+dist/
+*.spec
+*.manifest
+*.app
+
+# ==================== Logs ====================
+build_logs/
+startup_error.log
+crash_log.txt
+*.log
+logs/
+downloader_logs.jsonl
+downloader_logs.txt
+
+# ==================== Bases de données ====================
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+
+# ==================== Binaires téléchargés ====================
+aria2c.exe
+aria2c
+aria2_temp.zip
+
+# ==================== IDE ====================
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.project
+.pydevproject
+.settings/
+
+# ==================== OS ====================
+.DS_Store
+Thumbs.db
+desktop.ini
+*.lnk
+
+# ==================== Cache ====================
+.youtube_downloader_thumbnails/
+
+# ==================== Temporaires ====================
+*.tmp
+*.temp
+*.bak
+*.backup
+
+# ==================== Fichiers générés ====================
+src/
+deepseek_python_*.py
