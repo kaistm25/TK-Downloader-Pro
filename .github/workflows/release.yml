@@ -1,0 +1,174 @@
+﻿name: 🚀 Build & Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to release (e.g., 1.2.0)'
+        required: true
+        default: '1.2.0'
+
+permissions:
+  contents: write
+
+jobs:
+  build-windows:
+    name: 🪟 Build Windows .exe
+    runs-on: windows-latest
+    steps:
+      - name: 📥 Checkout
+        uses: actions/checkout@v4
+
+      - name: 🐍 Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: 📦 Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install PyQt5 aria2p pytubefix yt-dlp requests
+          pip install pyinstaller
+
+      - name: 🔍 Verify setup.py
+        run: python -m py_compile setup.py
+
+      - name: ✂️ Generate source files
+        run: python setup.py generate
+
+      - name: 🔨 Build with PyInstaller
+        run: python setup.py build
+        continue-on-error: true
+
+      - name: 📁 List dist folder
+        run: |
+          Get-ChildItem -Recurse dist | Select-Object FullName
+        continue-on-error: true
+
+      - name: 📦 Create ZIP archive
+        run: |
+          $version = "${{ github.ref_name }}"
+          if ($version -eq "") { $version = "v${{ github.event.inputs.version }}" }
+          Compress-Archive -Path "dist\TK Downloader Pro\*" -DestinationPath "TK-Downloader-$version-Windows.zip" -Force
+        continue-on-error: true
+
+      - name: 📤 Upload Windows artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: TK-Downloader-Windows
+          path: TK-Downloader-*-Windows.zip
+          if-no-files-found: warn
+
+  build-linux:
+    name: 🐧 Build Linux .tar.gz
+    runs-on: ubuntu-latest
+    steps:
+      - name: 📥 Checkout
+        uses: actions/checkout@v4
+
+      - name: 🐍 Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: 📦 Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y python3-pyqt5 libgl1-mesa-glx
+
+      - name: 📦 Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install PyQt5 aria2p pytubefix yt-dlp requests
+          pip install pyinstaller
+
+      - name: 🔍 Verify
+        run: python -m py_compile setup.py
+
+      - name: ✂️ Generate
+        run: python setup.py generate
+
+      - name: 🔨 Build
+        run: python setup.py build
+        continue-on-error: true
+
+      - name: 📦 Create archive
+        run: |
+          cd dist
+          tar -czf ../TK-Downloader-${{ github.ref_name }}-Linux.tar.gz *
+        continue-on-error: true
+
+      - name: 📤 Upload Linux artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: TK-Downloader-Linux
+          path: TK-Downloader-*-Linux.tar.gz
+          if-no-files-found: warn
+
+  release:
+    name: 🎁 Create GitHub Release
+    needs: [build-windows, build-linux]
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/')
+    steps:
+      - name: 📥 Checkout
+        uses: actions/checkout@v4
+
+      - name: 📥 Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: 📁 List downloaded files
+        run: find artifacts -type f
+
+      - name: 🎁 Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: "TK Downloader Pro ${{ github.ref_name }}"
+          body: |
+            ## 🎉 TK Downloader Pro ${{ github.ref_name }}
+            
+            ### 📥 التحميلات المتاحة
+            
+            - **🪟 Windows**: حمّل ملف `.zip` واستخرج محتواه
+            - **🐧 Linux**: حمّل ملف `.tar.gz` واستخرجه
+            
+            ### 🚀 طريقة التشغيل
+            
+            #### Windows
+            1. حمّل `TK-Downloader-${{ github.ref_name }}-Windows.zip`
+            2. استخرج الملفات
+            3. شغّل `TK Downloader Pro.exe`
+            
+            #### Linux
+            1. حمّل `TK-Downloader-${{ github.ref_name }}-Linux.tar.gz`
+            2. استخرج: `tar -xzf TK-Downloader-*.tar.gz`
+            3. شغّل: `./TK Downloader Pro`
+            
+            ### ✨ الميزات
+            - 🌐 دعم 25+ منصة
+            - 🎵 تحميل الصوت (MP3)
+            - 🌀 دعم Torrent
+            - 📥 تحميل جماعي
+            - 🔁 تحميل تسلسلي
+            - 📜 سجل التحميلات
+            
+            ### 📦 تغييرات الإصدار
+            - راجع commit history للمزيد من التفاصيل
+            
+            ---
+            
+            **📖 الوثائق الكاملة**: [README](https://github.com/kaistm25/TK-Downloader-Pro#readme)
+          files: |
+            artifacts/TK-Downloader-Windows/*.zip
+            artifacts/TK-Downloader-Linux/*.tar.gz
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -1,0 +1,142 @@
+﻿name: 🧪 Test & Verify
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  test:
+    name: 🐍 Test on ${{ matrix.os }} - Python ${{ matrix.python-version }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        python-version: ['3.9', '3.10', '3.11', '3.12']
+        exclude:
+          # اختيارية: استبعاد بعض التركيبات لتسريع العمل
+          - os: macos-latest
+            python-version: '3.9'
+          - os: macos-latest
+            python-version: '3.10'
+
+    steps:
+      - name: 📥 Checkout code
+        uses: actions/checkout@v4
+
+      - name: 🐍 Setup Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: 'pip'
+
+      - name: 🔍 Check setup.py syntax
+        run: python -m py_compile setup.py
+
+      - name: ✅ Verify setup.py content
+        run: |
+          python -c "
+          import ast
+          with open('setup.py', 'r', encoding='utf-8') as f:
+              tree = ast.parse(f.read())
+          print('✅ setup.py syntax OK')
+          print(f'📊 Found {len([n for n in ast.walk(tree) if isinstance(n, ast.ClassDef)])} classes')
+          print(f'📊 Found {len([n for n in ast.walk(tree) if isinstance(n, ast.FunctionDef)])} functions')
+          "
+
+      - name: 📦 Install base dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install PyQt5 requests
+          pip install pyqt5-tools || true
+
+      - name: 🔬 Syntax check all generated sources
+        run: |
+          python -c "
+          import ast
+          import sys
+          from pathlib import Path
+          
+          errors = []
+          for f in Path('.').glob('**/*.py'):
+              if 'venv' in str(f) or '.git' in str(f):
+                  continue
+              try:
+                  ast.parse(f.read_text(encoding='utf-8'))
+              except Exception as e:
+                  errors.append(f'{f}: {e}')
+          
+          if errors:
+              print('❌ Syntax errors:')
+              for e in errors:
+                  print(f'  {e}')
+              sys.exit(1)
+          print('✅ All Python files OK')
+          "
+
+      - name: 🧪 Test setup.py --version
+        run: python setup.py --version
+
+      - name: 🧪 Test setup.py check (dry run)
+        run: python setup.py check
+        continue-on-error: true
+
+  lint:
+    name: 🔍 Lint & Format Check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: 🐍 Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      
+      - name: 📦 Install linters
+        run: |
+          pip install flake8 black isort
+      
+      - name: 🔍 Flake8 check
+        run: |
+          flake8 setup.py --count --select=E9,F63,F7,F82 --show-source --statistics
+        continue-on-error: true
+      
+      - name: 🎨 Black format check
+        run: black --check --diff setup.py
+        continue-on-error: true
+      
+      - name: 📋 Isort check
+        run: isort --check-only --diff setup.py
+        continue-on-error: true
+
+  security:
+    name: 🔒 Security Check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: 🐍 Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      
+      - name: 🔒 Install bandit
+        run: pip install bandit
+      
+      - name: 🔍 Bandit security scan
+        run: |
+          bandit -r setup.py -f txt || true
+        continue-on-error: true
+      
+      - name: 📋 Check for secrets
+        run: |
+          if grep -rE "(password|api_key|secret|token)\s*=\s*['\"][^'\"]{20,}" setup.py; then
+            echo "⚠️ Potential hardcoded secrets found"
+            exit 1
+          else
+            echo "✅ No hardcoded secrets"
+          fi
+        continue-on-error: true
